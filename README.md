@@ -8,8 +8,9 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 1. The underlying mathematical model 
 2. Code features
 3. Numerical method
-4. Discretization, parameter tuning and limitations
-5. Worked examples
+
+An introductory Jupyter notebook for setting up and running the module is found here. 
+
 
 
 
@@ -43,6 +44,3 @@ $$ \partial_t A_\varphi + (\bar{U} + C_g)\cdot \nabla_X A_\varphi + \frac{1}{2}\
 
 We solve both the wave system and the energy and Schrödinger equations using a standard Fourier pseudo-spectral method (cf. \cite{trefethen2000spectral}); we express our unknowns in a truncated Fourier basis, e.g., $\eta_N(t,X) = \sum_{|\bm{k}| \leq N} \eta_{\bm{k}}(t)e^{i\bm{k}\cdot X}$, compute spatial derivatives in the $\bm{k}$-domain, and transform back to physical space for multiplication by vector fields and time stepping. As the current $\bar{U}$ is assumed to be smooth (and there are no non-linear terms), we do not enforce de-aliasing. For the DN operator, we use the truncated Fourier-Galerkin method developed in \cite{andrade2018three}. We precompute the bathymetry dependent part of the $\mathcal{G}(b)$, and we also implement absorbing boundary conditions \cite{bodony2006analysis}. For time integration of the PDEs we use the standard Runge-Kutta 4 scheme and for wavenumber computation, we incorporate the open source ray tracing module \cite{halsne2023ocean}. The solver has been verified numerically by considering convergence as a function of grid size/Fourier modes, and by veryfying that the total energy is conserved in the case of variable bathymetry and divergence free currents. 
 
-### 4. Discretization, parameter tuning and limitations
-
-In the example below we outline some simple heuristics for choosing the spatial and temporal discretization, for tuning the absorbing boundary layer and for pre-computing the DN operator to a sufficient accuracy. 
