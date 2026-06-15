@@ -1,6 +1,8 @@
 # WaCuBa
 A simple Python module for flexible simulation of linear water waves interacting with currents and variable bathymetry. Code coming soon.
 
+<img src="div/wave_analysis_final.png" alt="..." width="600"/>
+
 ## Introduction 
 
 This Notebook contains a short introduction to the WaCuBa module for simulating linear water waves interacting with surface currents and variable bathymetry. 
