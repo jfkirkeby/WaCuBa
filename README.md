@@ -8,24 +8,7 @@ A simple Python module for flexible simulation of linear water waves interacting
   <img align="middle" width="49%" alt="wave_analysis_final_smaller" src="https://github.com/user-attachments/assets/62465883-cd64-481f-8087-3d1239c17483" />
   <img align="middle" width="49%" alt="wave-current-bathy rough" src="https://github.com/user-attachments/assets/eb6cecdd-3ea7-414a-b87e-9de6c002a58f" />
 </p>
-<table>
-    <thead>
-        <tr>
-            <th align="center">Wave Analysis</th>
-            <th align="center">Wave Current Bathymetry</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td valign="middle" align="center">
-                <img width="100%" alt="wave_analysis_final_smaller" src="https://github.com/user-attachments/assets/62465883-cd64-481f-8087-3d1239c17483" />
-            </td>
-            <td valign="middle" align="center">
-                <img width="100%" alt="wave-current-bathy rough" src="https://github.com/user-attachments/assets/eb6cecdd-3ea7-414a-b87e-9de6c002a58f" />
-            </td>
-        </tr>
-    </tbody>
-</table>
+
 
 ## Introduction 
 
