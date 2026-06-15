@@ -74,6 +74,8 @@ cd WaCuBa
 # Install the required libraries
 pip install -r requirements.txt
 
+```
+
 ### References: 
 
 [1] A. Kirkeby & T. Halsne - Wave-Current-Bathymetry Interaction Revisited: Modeling, Analysis and Asymptotics, 2026,  [Pre-print](https://arxiv.org/abs/2603.25435)
