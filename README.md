@@ -16,12 +16,11 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 ### 1. Mathematical model
 The underlying system of partial differential equations that are solved numerically is 
 $$
-
-    \begin{cases}
+\begin{cases}
         \partial_t \eta +  \nabla_X\cdot(\bar{U} \eta) = \mathcal{G}(b)\varphi, \\
         \partial_t \varphi + \bar{U}\cdot \nabla_{X} \varphi = - g\eta .\\  
-    \end{cases}
-  $$
+\end{cases}
+$$
 
 Above, $\eta(t,X)$ is the wave amplitude and $\varphi(t,X)$ is the surface velocity potential. In addition, $\bar{U}(X)$ is the surface current, $b = b(X)$ is the depth (from $z=0$) and $\mathcal{G}(b)$ is the Dirichlet-to-Neumann (DN) operator. The system is described and analysed in detail in the paper (....). 
 
