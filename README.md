@@ -29,7 +29,7 @@ The code has the following features:
 
  - Solves the Cauchy problem the wave system  with prescribed initial conditions $(\eta_0,\varphi_0)$ and variable bathymetry $b(X)$ and current $\bar{U}(X)$ on a rectangular domain. Returns $\eta(t,X),\varphi(t,X)$ and energy density $\mathcal{E}(t,X)$ and additional wave features. 
 
-- Uses ray tracing to compute wavenumber fields $\bm{k}(X)$ for given bathymetry $b(X)$ and current $\bar{U}(X)$.
+- Uses ray tracing to compute wavenumber fields ```math \bm{k}(X) ``` for given bathymetry $b(X)$ and current $\bar{U}(X)$.
 
 - Computes all intrinsic wave properties and solves the asymptotic wave action equation 
 $$ \partial_t \mathcal{A} + \nabla_X \left((\bar{U} + C_g)\mathcal{A} )\right) = 0$$
