@@ -121,16 +121,10 @@ def precompute_dtn_system(Lx, Ly, Nx, Ny, b, k_cutoff=0.2, flat_bottom=False):
             raise ValueError(f"b shape {b.shape} must match (Ny, Nx)={(Ny, Nx)}")
 
     
-    # 2. Grid & Wavenumber Setup (XY Indexing)
-    dx, dy = Lx / Nx, Ly / Ny
-    kx_1d = 2 * np.pi * fftfreq(Nx, d=dx)
-    ky_1d = 2 * np.pi * fftfreq(Ny, d=dy)
-    
-    # indexing='xy' -> shape (Ny, Nx)
-    KX, KY = np.meshgrid(kx_1d, ky_1d, indexing='xy')
-    
-    K_mod = np.sqrt(KX**2 + KY**2)
-    K_mod[0, 0] = 1.0  # Avoid div by zero, masked later
+   
+    KX, KY, K_mod = build_wavenumbers(Lx, Ly, Nx, Ny)  # Get KX, KY with correct indexing
+ 
+    K_mod[0, 0] = 1.0  
 
     # 3. Depth Decomposition
     h = np.mean(b)
@@ -275,7 +269,8 @@ def apply_dtn(phi, topo_data):
 # ============================================================
 
 def rhs_system(eta, phi, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data):
-    # Spectral gradients for high accuracy
+
+    # Spectral gradients 
     d_eta_dx, d_eta_dy = spectral_gradient(eta, Kx, Ky)
     d_phi_dx, d_phi_dy = spectral_gradient(phi, Kx, Ky)
     
@@ -293,6 +288,9 @@ def rhs_system(eta, phi, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data):
     return eta_t, phi_t
 
 def step_system_rk4(eta, phi, dt, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data):
+    
+    """ """
+    
     k1_eta, k1_phi = rhs_system(eta, phi, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data)
     
     k2_eta, k2_phi = rhs_system(
@@ -318,63 +316,7 @@ def step_system_rk4(eta, phi, dt, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data):
     return eta_new, phi_new
 
 
-def simulate_water_waves_constant(X, Y, eta0, phi0, b0, T, N_snaps, g=9.81):
-    """
-    Solves linear water waves with constant depth using an Integrating Factor method.
-    This method provides exact linear phase evolution to avoid numerical dispersion.
-    """
-    Ny, Nx = X.shape
-    Lx = X[0, -1] - X[0, 0] + (X[0, 1] - X[0, 0])
-    Ly = Y[-1, 0] - Y[0, 0] + (Y[1, 0] - Y[0, 0])
-    
-    # 1. Wavenumbers and Dispersion Relation
-    kx = 2 * np.pi * np.fft.fftfreq(Nx, d=Lx/Nx)
-    ky = 2 * np.pi * np.fft.fftfreq(Ny, d=Ly/Ny)
-    KX, KY = np.meshgrid(kx, ky)
-    K = np.sqrt(KX**2 + KY**2)
-    
-    # omega^2 = g * k * tanh(k * b0)
-    G0 = K * np.tanh(K * b0)
-    omega = np.sqrt(g * G0)
-    omega[0, 0] = 0.0 # Avoid division by zero for the mean mode
-    
-    # 2. Time Stepping Setup
-    dt = T / 1000  # Default to 1000 steps for stability, adjust as needed
-    t_snaps = np.linspace(0, T, N_snaps)
-    results_eta = []
-    
-    # Pre-calculate the exact rotation terms for one time-step dt
-    cos_wt = np.cos(omega * dt)
-    sin_wt = np.sin(omega * dt)
-    
-    # Transfer coefficients (used for rotating the phase)
-    # We use small epsilon to avoid NaN at K=0
-    eps = 1e-15
-    S = G0 / (omega + eps)
-    S_inv = g / (omega + eps)
 
-    # 3. Main Loop
-    eta_h = fft2(eta0)
-    phi_h = fft2(phi0)
-    
-    snap_idx = 0
-    t = 0.0
-    num_steps = int(T / dt)
-    
-    for n in range(num_steps + 1):
-        # Save snapshot if time matches
-        if snap_idx < N_snaps and t >= t_snaps[snap_idx] - 1e-10:
-            results_eta.append(np.real(ifft2(eta_h)))
-            snap_idx += 1
-            
-        # EXACT rotation of phase in Fourier Space (no dispersion error)
-        eta_next_h =  cos_wt * eta_h + S * sin_wt * phi_h
-        phi_next_h = -S_inv * sin_wt * eta_h + cos_wt * phi_h
-        
-        eta_h, phi_h = eta_next_h, phi_next_h
-        t += dt
-        
-    return t_snaps, np.array(results_eta)
 
 
 def simulate_wave_system(
@@ -383,22 +325,42 @@ def simulate_wave_system(
     eta0, phi0,
     U,
     topo_data,
-    bulk_data,
-    energy_domain,
-    g=9.81,
     sponge_frac=0.15,
     sponge_sides="lrtb", 
     sigma_max=1.0,
     snapshot_interval=None,
-    compute_energy_integral=False
-):
+    ):
+    
+    """ 
+    Simulates the wave system using RK4 time stepping and spectral methods for spatial derivatives.
+    
+    Args: 
+        Lx, Ly, Nx, Ny: domain and resolution parameters
+        T_final, dt: simulation time and temporal stepsize
+        eta0, phi0: initial conditions for surface elevation and potential (2D arrays)
+        U: tuple (Ux, Uy) of current velocity fields (2D arrays)
+        topo_data: precomputed DtN operator data from precompute_dtn_system
+        sponge_frac: fraction of domain to use as sponge layer for absorbing boundaries
+        sponge_sides: which sides to apply sponge layer ("l", "r", "t", "b" for left, right, top, bottom)
+        sigma_max: maximum damping coefficient in sponge layer
+        snapshot_interval: time interval for saving snapshots (if None, only save final state)
+    
+    Returns:
+        t_snapshots: list of time points for saved snapshots
+        eta_snapshots: list of surface elevation arrays at saved snapshots
+        phi_snapshots: list of surface potential arrays at saved snapshots
+        energy_density_snapshots: list of energy density arrays at saved snapshots
+        
+    """
+    
     X, Y, dx, dy = build_grid(Lx, Ly, Nx, Ny)
     Kx, Ky, K = build_wavenumbers(Lx, Ly, Nx, Ny)
-    
+    g = 9.81
     # Initial conditions
     eta = eta0
     phi = phi0
     Ux, Uy = U
+    # add div(U)*eta term as a source to rhs in RK4
     divU = np.gradient(Ux,axis = 1)/dx + np.gradient(Uy,axis = 0)/dy
     sigma = build_sponge_sides(Lx, Ly, X, Y, sponge_frac=sponge_frac, sigma_max=sigma_max, sides = sponge_sides)
     
@@ -408,55 +370,33 @@ def simulate_wave_system(
         snapshot_interval = n_steps
 
    
+    #initialize snapshots
     
-    # Create energy mask
-    energy_mask = (X >= energy_domain[0]) & (X <= energy_domain[1]) & \
-                  (Y >= energy_domain[2]) & (Y <= energy_domain[3])
-    energy_mask = energy_mask.astype(float)
-        
     t = 0.0
     eta_snapshots = [eta0.copy()]
     phi_snapshots = [phi0.copy()]
     t_snapshots = [t]
-    energy_density_snapshots = [(g*eta0**2).copy()]
-    energy_snapshots = [0]
-    surface_integral_history = [0]
-    bulk_integral_history = [0]
-    
+    energy_density_snapshots = []
+   
     for n in range(n_steps + 1):
         # Step
         eta, phi = step_system_rk4(eta, phi, dt, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data)
         
         # Save snapshots
         if n % int(snapshot_interval / dt) == 0 or n == n_steps:
-            # Energy Calculation (Hamiltonian density)
-            # H = 0.5 * (g * eta^2 + phi * G[phi])
+    
             Gphi = apply_dtn(phi, topo_data)
-            energy_density = 0.5 * (g * eta**2 + phi * Gphi)
-            if compute_energy_integral == True: 
-                print("Computing energy integrals at time t =", t)
-                surf_int, bulk_int = compute_energy_integrals_prop8(
-                eta, phi, Kx, Ky, dx, X, 
-                U_func=bulk_data['U_func'], 
-                W_func=bulk_data['W_func'], 
-                b_depth=bulk_data['b_depth']
-            )
-                surface_integral_history.append(surf_int)
-                bulk_integral_history.append(bulk_int)
-            
-            # Integrate over domain
-            total_energy = np.sum( energy_mask*energy_density) * dx * dy
-        
+            energy_density = 0.5 * (g * eta**2 + phi * Gphi)    
             eta_snapshots.append(eta.copy())
             phi_snapshots.append(phi.copy())
             energy_density_snapshots.append(energy_density.copy())
-            energy_snapshots.append(total_energy)
+            
             t_snapshots.append(t)
             print(f"Time: {t:.2f}/{T_final:.2f}", end='\r')
         
         t += dt
 
-    return np.array(t_snapshots), eta_snapshots, phi_snapshots, energy_density_snapshots, energy_snapshots, surface_integral_history, bulk_integral_history, (X, Y)
+    return np.array(t_snapshots), eta_snapshots, phi_snapshots, energy_density_snapshots
 
 # ============================================================
 # 4. Utilities and Plots
@@ -484,35 +424,18 @@ def wave_plots(eta_list, n_plots, X, Y, Lx, Ly, t_list,title = "Surface Elevatio
 # ============================================================
 
 
-def get_spectral_grid(Lx, Ly, Nx, Ny):
-    """
-    Generates grid and wavenumbers for spectral methods.
-    Uses 'ij' (matrix) indexing for consistency with linear algebra.
-    """
-    x = np.linspace(0, Lx, Nx, endpoint=False)
-    y = np.linspace(0, Ly, Ny, endpoint=False)
-    X, Y = np.meshgrid(x, y, indexing='ij')
-    
-    # Wavenumbers (frequencies)
-    kx = 2 * np.pi * np.fft.fftfreq(Nx, d=Lx/Nx)
-    ky = 2 * np.pi * np.fft.fftfreq(Ny, d=Ly/Ny)
-    KX, KY = np.meshgrid(kx, ky, indexing='ij')
-    
-    return X, Y, KX, KY
-
-
 def rhs_advection(t, u, Vx, Vy, g, KX, KY):
     """
     Computes the right-hand side of the PDE:
     du/dt = - (V dot grad(u)) + g(x)*u
     """
-    # 1. Compute gradients via FFT (Non-dissipative spatial discretization)
+   
     du_dx, du_dy = spectral_gradient(u, KX, KY)
     
-    # 2. Compute Advection term: - (Vx * du/dx + Vy * du/dy)
+   
     advection = -(Vx * du_dx + Vy * du_dy)
     
-    # 3. Compute Source/Growth term
+    
     source = g * u
     
     return advection + source
@@ -522,7 +445,7 @@ def solve_advection_rk4(E0, V, g, Lx, Ly, T_final, dt, snapshot_interval=1.0):
     """
     Solves du/dt + V.grad(u) = gu using RK4 time stepping and Spectral gradients.
     
-    Parameters:
+    Args:
         e0 : Initial condition (2D array)
         V : Tuple (Vx, Vy) of velocity fields (2D arrays)
         g : Source function field (2D array)
@@ -674,70 +597,6 @@ def solve_schrodinger_rk4(A0, V, Dxx, Dyy, Dxy, g, Lx, Ly, T_final, dt, snapshot
           
     return A_snapshots, times
 
-
-def generate_field_with_constraints(f_func, U_target, X0_target, Lx, Ly, Nx, Ny):
-    """
-    Generates a vector field U(x,y) such that:
-      1. div(U) = f_func(x,y)
-      2. U(X0_target) = U_target
-    
-    Parameters:
-        f_func (function): The divergence source function f(X, Y).
-        U_target (tuple): Desired velocity vector (u, v) at the target point.
-        X0_target (tuple): Target location (x0, y0).
-        Lx, Ly, Nx, Ny: Domain parameters.
-    """
-    # 1. Setup Grid
-    x = np.linspace(0, Lx, Nx, endpoint=False)
-    y = np.linspace(0, Ly, Ny, endpoint=False)
-    X, Y = np.meshgrid(x, y, indexing='xy')
-    
-    # 2. Compute Divergence Source f(X)
-    f_val = f_func
-    
-    # Enforce solvability for periodic domain (Net flux must be 0)
-    f_mean = np.mean(f_val)
-    if abs(f_mean) > 1e-10:
-        print(f"Adjusting source mean by {-f_mean:.2e} to allow periodic solution.")
-        f_val = f_val - f_mean
-
-    # 3. Solve Poisson: Laplacian(phi) = f
-    kx = 2 * np.pi * np.fft.fftfreq(Nx, d=Lx/Nx)
-    ky = 2 * np.pi * np.fft.fftfreq(Ny, d=Ly/Ny)
-    KX, KY = np.meshgrid(kx, ky, indexing='xy')
-    K2 = KX**2 + KY**2
-    K2[0, 0] = 1.0  # Avoid div/0
-    
-    f_hat = np.fft.fft2(f_val)
-    Phi_hat = -f_hat / K2
-    Phi_hat[0, 0] = 0.0
-    
-    # 4. Compute Raw Gradient Field (V_raw = grad(phi))
-    U_hat = 1j * KX * Phi_hat
-    V_hat = 1j * KY * Phi_hat
-    
-    U_raw = np.real(np.fft.ifft2(U_hat))
-    V_raw = np.real(np.fft.ifft2(V_hat))
-    
-    # 5. Determine Correction Constant C
-    # Find indices closest to X0_target
-    idx_x = int(round(X0_target[0] / Lx * Nx)) % Nx
-    idx_y = int(round(X0_target[1] / Ly * Ny)) % Ny
-    
-    # Sample what we have
-    u_current = U_raw[idx_x, idx_y]
-    v_current = V_raw[idx_x, idx_y]
-    
-    # Calculate difference
-    C_u = U_target[0] - u_current
-    C_v = U_target[1] - v_current
-    
-    # 6. Apply Correction
-    U_final = U_raw + C_u
-    V_final = V_raw + C_v
-    
-    return  U_final, V_final, f_val
-
 def plot_current(Ux, Uy, X, Y, title="Current Field"):
     
     plt.figure(figsize=(10, 5))
@@ -865,38 +724,3 @@ def intrinsic_wave_quantities(kx,ky,b,X,Y):
        
     return sigma, Cg_x, Cg_y, divCg, grad_x_sigma, grad_y_sigma, Dxx, Dyy, Dxy
 
-def compute_envelope_metrics(energy_density_snaps,
-                             energy_density_snaps_wa,
-                             energy_domain,
-                             p,
-                             X,
-                             Y):
-    
-    diffEEwa = [a - b for a, b in zip(energy_density_snaps, energy_density_snaps_wa)]
-    
-    energy_mask = (X >= energy_domain[0]) & (X <= energy_domain[1]) & \
-                    (Y >= energy_domain[2]) & (Y <= energy_domain[3])
-    energy_mask = energy_mask.astype(float)
-    
-  
-    e_wa_max = []
-    e_wa_Lp = []
-    
-    for e in energy_density_snaps_wa:
-        e_wa_max.append(np.max(np.abs(energy_mask*e)))
-        e_wa_Lp.append((np.sum((energy_mask*e)**p))**(1/p))
-        
-    e_full_max = []
-    e_full_Lp = []
-    
-    for e in energy_density_snaps:
-        e_full_max.append(np.max(np.abs(energy_mask*e)))
-        e_full_Lp.append((np.sum((energy_mask*e)**p)**(1/p)))
-        
-        
-    e_wa_diff = []
-    for e in diffEEwa:
-        e_wa_diff.append(np.max(np.abs(energy_mask*e)))
-        
-   
-    return e_wa_diff, e_wa_max, e_wa_Lp, e_full_max, e_full_Lp
