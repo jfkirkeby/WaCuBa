@@ -17,6 +17,7 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 1. The underlying mathematical model 
 2. Code features
 3. Numerical method
+4. Installation
 
 An introductory Jupyter notebook for setting up and running the module is found [here](notebooks/example1.ipynb). 
 
@@ -56,6 +57,22 @@ and the Schrödinger equation
 ### 3. Numerical method
 
 We solve both the wave system and the energy and Schrödinger equations using a standard Fourier pseudo-spectral method (cf. [2]; we express our unknowns in a truncated Fourier basis, e.g., $\eta_N(t,X) = \sum_{|k| \leq N} \eta_{k}(t)e^{i k\cdot X}$, compute spatial derivatives in the $\k$-domain, and transform back to physical space for multiplication by vector fields and time stepping. As the current $\bar{U}$ is assumed to be smooth (and there are no non-linear terms), we do not enforce de-aliasing. For the DN operator, we use the truncated Fourier-Galerkin method developed in [3]. We precompute the bathymetry dependent part of the $\mathcal{G}(b)$, and we also implement absorbing boundary conditions [4]. For time integration of the PDEs we use the standard Runge-Kutta 4 scheme and for wavenumber computation, we incorporate the open source ray tracing module [5]. The solver has been verified numerically by considering convergence as a function of grid size/Fourier modes, and by veryfying that the total energy is conserved in the case of variable bathymetry and divergence free currents. 
+
+### 4. Installation
+
+To run WaCuBa on locally, clone this repository and install the necessary dependencies using `pip`. 
+
+Open your terminal and run the following commands:
+
+```bash
+# Clone the repository
+git clone [https://github.com/jfkirkeby/WaCuBa.git](https://github.com/jfkirkeby/WaCuBa.git)
+
+# Navigate into the project folder
+cd WaCuBa
+
+# Install the required libraries
+pip install -r requirements.txt
 
 ### References: 
 
