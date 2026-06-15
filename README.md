@@ -27,7 +27,7 @@ Above, $\eta(t,X)$ is the wave amplitude and $\varphi(t,X)$ is the surface veloc
 ### 2. Code features
 The code has the following features: 
 
- - Solves the Cauchy problem the wave system  with prescribed initial conditions $(\eta_0,\varphi_0)$ and variable bathymetry $b(X)$ and current $\bar{U}(X)$ on a rectangular domain. Returns $\eta(t,X),\varphi(t,X) $ and energy density $\mathcal{E}(t,X)$ and additional wave features. 
+ - Solves the Cauchy problem the wave system  with prescribed initial conditions $(\eta_0,\varphi_0)$ and variable bathymetry $b(X)$ and current $\bar{U}(X)$ on a rectangular domain. Returns $\eta(t,X),\varphi(t,X)$ and energy density $\mathcal{E}(t,X)$ and additional wave features. 
 
 - Uses ray tracing to compute wavenumber fields $\bm{k}(X)$ for given bathymetry $b(X)$ and current $\bar{U}(X)$.
 
