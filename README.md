@@ -33,9 +33,13 @@ The code has the following features:
 - Uses ray tracing to compute wavenumber fields ```math \bm{k}(X) ``` for given bathymetry $b(X)$ and current $\bar{U}(X)$.
 
 - Computes all intrinsic wave properties and solves the asymptotic wave action equation 
-$$ \partial_t \mathcal{A} + \nabla_X \left((\bar{U} + C_g)\mathcal{A} )\right) = 0$$
+```math
+\partial_t \mathcal{A} + \nabla_X \left((\bar{U} + C_g)\mathcal{A} )\right) = 0
+```
 and the Schrödinger equation 
-$$ \partial_t A_\varphi + (\bar{U} + C_g)\cdot \nabla_X A_\varphi + \frac{1}{2}\left(\nabla_X \cdot(\bar{U} + C_g)\right) A_\varphi + \frac{D_{\bar{U}+ C_g}\sigma }{2\sigma}A_\varphi  +\frac{i\mu}{2}\nabla_X \cdot (D \nabla_X A_\varphi) = 0. $$
+```math
+\partial_t A_\varphi + (\bar{U} + C_g)\cdot \nabla_X A_\varphi + \frac{1}{2}\left(\nabla_X \cdot(\bar{U} + C_g)\right) A_\varphi + \frac{D_{\bar{U}+ C_g}\sigma }{2\sigma}A_\varphi  +\frac{i\mu}{2}\nabla_X \cdot (D \nabla_X A_\varphi) = 0.
+```
 
 - Allows for flexible and easy comparison of results from different models for a given bathymetry and current.  
 
