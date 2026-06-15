@@ -9,7 +9,7 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 2. Code features
 3. Numerical method
 
-An introductory Jupyter notebook for setting up and running the module is found here. 
+An introductory Jupyter notebook for setting up and running the module is found [here](notebooks/example1.ipynb). 
 
 
 
