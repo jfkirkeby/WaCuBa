@@ -49,9 +49,9 @@ and the Schrödinger equation
 We solve both the wave system and the energy and Schrödinger equations using a standard Fourier pseudo-spectral method (cf. \cite{trefethen2000spectral}); we express our unknowns in a truncated Fourier basis, e.g., $\eta_N(t,X) = \sum_{|\bm{k}| \leq N} \eta_{\bm{k}}(t)e^{i\bm{k}\cdot X}$, compute spatial derivatives in the $\bm{k}$-domain, and transform back to physical space for multiplication by vector fields and time stepping. As the current $\bar{U}$ is assumed to be smooth (and there are no non-linear terms), we do not enforce de-aliasing. For the DN operator, we use the truncated Fourier-Galerkin method developed in \cite{andrade2018three}. We precompute the bathymetry dependent part of the $\mathcal{G}(b)$, and we also implement absorbing boundary conditions \cite{bodony2006analysis}. For time integration of the PDEs we use the standard Runge-Kutta 4 scheme and for wavenumber computation, we incorporate the open source ray tracing module \cite{halsne2023ocean}. The solver has been verified numerically by considering convergence as a function of grid size/Fourier modes, and by veryfying that the total energy is conserved in the case of variable bathymetry and divergence free currents. 
 
 References:
-[1] A. Kirkeby & T. Halsen - Wave-Current-Bathymetry Interaction Revisited: Modeling, Analysis and Asymptotics, 2026,  [Pre-print](https://arxiv.org/abs/2603.25435) \ 
-[2] N. Trefethen, Spectral Methods in MATLAB, 2000, SIAM. \
-[3] D. Andrade & A. Nachbin, A three-dimensional Dirichlet-to-Neumann operator for water waves over topography, 2018, Journal of Fluid Mechanics. \
+[1] A. Kirkeby & T. Halsen - Wave-Current-Bathymetry Interaction Revisited: Modeling, Analysis and Asymptotics, 2026,  [Pre-print](https://arxiv.org/abs/2603.25435)\ 
+[2] N. Trefethen, Spectral Methods in MATLAB, 2000, SIAM.\
+[3] D. Andrade & A. Nachbin, A three-dimensional Dirichlet-to-Neumann operator for water waves over topography, 2018, Journal of Fluid Mechanics.\
 [4] D. Bodony, Analysis of sponge zones for computational fluid mechanics, 2006, Journal
-of Computational Physics. \
+of Computational Physics.\
 [5]
