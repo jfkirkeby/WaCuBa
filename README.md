@@ -21,7 +21,7 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 
 An introductory Jupyter notebook for setting up and running the module is found [here](notebooks/example1.ipynb). 
 
-More notebooks will be added in the near future. 
+More notebooks and functionality will be added in the near future. 
 
 
 
