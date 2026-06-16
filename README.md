@@ -1,7 +1,7 @@
 
 
 # WaCuBa -  simple simulation of wave-current-bathymetry interaction
-A simple Python module for flexible simulation of linear water waves interacting with currents and variable bathymetry. Code coming soon.
+A simple Python module for flexible simulation of linear water waves interacting with currents and variable bathymetry.
 
 
 <p align="center">
@@ -21,6 +21,7 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 
 An introductory Jupyter notebook for setting up and running the module is found [here](notebooks/example1.ipynb). 
 
+More notebooks will be added in the near future. 
 
 
 
