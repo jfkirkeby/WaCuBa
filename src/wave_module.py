@@ -1,5 +1,7 @@
 import numpy as np
+import math
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 from numpy.fft import fft2, ifft2, fftfreq
 from numpy.linalg import cond, solve
 from dataclasses import dataclass
@@ -15,8 +17,8 @@ import sys,os
 # ============================================================
 
 def build_grid(Lx, Ly, Nx, Ny):
-    x = np.linspace(0.0, Lx, Nx, endpoint=False)
-    y = np.linspace(0.0, Ly, Ny, endpoint=False)
+    x = np.linspace(0, Lx, Nx, endpoint=False)
+    y = np.linspace(0, Ly, Ny, endpoint=False)
     dx = Lx / Nx
     dy = Ly / Ny
     X, Y = np.meshgrid(x, y, indexing="xy")
@@ -359,6 +361,7 @@ def simulate_wave_system(
     # Initial conditions
     eta = eta0
     phi = phi0
+    Gphi0 = apply_dtn(phi, topo_data)
     Ux, Uy = U
     # add div(U)*eta term as a source to rhs in RK4
     divU = np.gradient(Ux,axis = 1)/dx + np.gradient(Uy,axis = 0)/dy
@@ -376,7 +379,7 @@ def simulate_wave_system(
     eta_snapshots = [eta0.copy()]
     phi_snapshots = [phi0.copy()]
     t_snapshots = [t]
-    energy_density_snapshots = []
+    energy_density_snapshots = [0.5*g*eta0.copy()**2 + 0.5*phi0.copy()*Gphi0.copy()] # Placeholder for initial energy density (can be computed if needed)
    
     for n in range(n_steps + 1):
         # Step
@@ -404,21 +407,51 @@ def simulate_wave_system(
 
 
 
-def wave_plots(eta_list, n_plots, X, Y, Lx, Ly, t_list,title = "Surface Elevation η"):
-    total_snaps = len(t_list)
-    step = max(1, total_snaps // n_plots)
+def wave_plots(eta_list, n_plots, X, Y, Lx, Ly, t_list, title=r"Surface Elevation $\eta(x,y)$", cmap="default"):
     
-    for idx in range(0, total_snaps, step):
-        plt.figure(figsize=(10, 3))
-        plt.pcolormesh(X, Y, eta_list[idx], shading="auto", cmap='RdBu_r',vmin=-np.max(np.abs(eta_list[0])), vmax=np.max(np.abs(eta_list[0])))
-        plt.colorbar(label=r"$\eta(x,y)$")
-        plt.xlabel("x")
-        plt.ylabel("y")
-        plt.title(f"{title} t = {t_list[idx]:.2f}")
-        plt.gca().set_aspect('equal')
-        plt.tight_layout()
-        plt.show()
+    total_snaps = len(t_list)
+    n_plots = min(n_plots, total_snaps)
+    
+    indices = np.linspace(0, total_snaps - 1, n_plots, dtype=int)
+    
+    ncols = min(n_plots, 3)
+    nrows = math.ceil(n_plots / ncols)
+    
+    domain_aspect = Ly / Lx  
+    col_width = 4.5
+    row_height = (col_width * domain_aspect) + 0.8 
+    
+    if cmap == "default":
+        colors = ["#08306b", "#ffffff", "#41b6c4"] 
+        Cmap = water_cmap = LinearSegmentedColormap.from_list("WaterWave", colors)
+    
+    else: Cmap = cmap
+    
+    fig, axes = plt.subplots(nrows, ncols, figsize=(col_width * ncols, row_height * nrows), 
+                             squeeze=False, layout="constrained")
+    
+    fig.suptitle(title, fontsize=16)
+    
+    vmax = np.max(np.abs(eta_list[0]))
+    vmin = -vmax
+    
+    flat_axes = axes.flatten()
+    
+    for i, ax in enumerate(flat_axes):
+        if i < n_plots:
+            idx = indices[i]
+            c = ax.pcolormesh(X, Y, eta_list[idx], shading="auto", cmap=Cmap, vmin=vmin, vmax=vmax)
+            ax.set_title(f"$t = {t_list[idx]:.2f}$", fontsize=11)
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_aspect('equal')
+        else:
+            ax.axis('off')
 
+    cbar = fig.colorbar(c, ax=axes, location='right', shrink=0.85)
+    cbar.set_label(r"$\eta(x,y)$", fontsize=12)
+    
+    plt.show()
 # ============================================================
 # 5. Continuity/Transport Equations 
 # ============================================================
