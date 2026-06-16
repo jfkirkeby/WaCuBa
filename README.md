@@ -61,7 +61,7 @@ We solve both the wave system and the energy and Schrödinger equations using a 
 
 ### 4. Installation
 
-To run WaCuBa on locally, clone this repository and install the necessary dependencies using `pip`. 
+To run WaCuBa locally, clone this repository and install the necessary dependencies using `pip`. 
 
 Open your terminal and run the following commands:
 
