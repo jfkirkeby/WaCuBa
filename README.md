@@ -1,6 +1,6 @@
 
 
-# WaCuBa -  simple simulation of wave-current-bathymetry interaction
+# WaCuBa -  simple simulator of wave-current-bathymetry interaction
 A simple Python module for flexible simulation of linear water waves interacting with currents and variable bathymetry.
 
 
@@ -57,7 +57,7 @@ Above, $\eta(t,X)$ is the wave amplitude and $\varphi(t,X)$ is the surface veloc
 ### 3. Code features
 The code has the following features: 
 
- - Solves the Cauchy problem the wave system  with prescribed initial conditions $(\eta_0,\varphi_0)$ and variable bathymetry $b(X)$ and current $\bar{U}(X)$ on a rectangular domain. Returns $\eta(t,X),\varphi(t,X)$ and energy density $\mathcal{E}(t,X)$ and additional wave features. 
+- Solves the Cauchy problem the wave system  with prescribed initial conditions $(\eta_0,\varphi_0)$ and variable bathymetry $b(X)$ and current $\bar{U}(X)$ on a rectangular domain. Returns $\eta(t,X),\varphi(t,X)$ and energy density $\mathcal{E}(t,X)$ and additional wave features. 
 
 - Uses ray tracing to compute wavenumber fields $k(X)$ for given bathymetry $b(X)$ and current $\bar{U}(X)$.
 
@@ -74,8 +74,17 @@ and the Schrödinger equation
 
 
 ### 4. Numerical method
+The numerical workflow for running WaCuBa is:
 
-We solve both the wave system and the energy and Schrödinger equations using a standard Fourier pseudo-spectral method (cf. [2]); we express our unknowns in a truncated Fourier basis, e.g., $\eta_N(t,X) = \sum_{|k| \leq N} \eta_{k}(t)e^{i k\cdot X}$, compute spatial derivatives in the $k$-domain, and transform back to physical space for multiplication by vector fields and time stepping. As the current $\bar{U}$ is assumed to be smooth (and there are no non-linear terms), we do not enforce de-aliasing. For the DN operator, we use the truncated Fourier-Galerkin method developed in [3]. We precompute the bathymetry dependent part of the $\mathcal{G}(b)$, and we also implement absorbing boundary conditions [4]. For time integration of the PDEs we use the standard Runge-Kutta 4 scheme and for wavenumber computation, we incorporate the open source ray tracing module [5]. The solver has been verified numerically by considering convergence as a function of grid size/Fourier modes, and by veryfying that the total energy is conserved in the case of variable bathymetry and divergence free currents. 
+- We solve both the wave system and the energy and Schrödinger equations using a standard Fourier pseudo-spectral method (cf. [2]); we express our unknowns in a truncated Fourier basis, e.g., $\eta_N(t,X) = \sum_{|k| \leq N} \eta_{k}(t)e^{i k\cdot X}$, compute spatial derivatives in the $k$-domain, and transform back to physical space for multiplication by vector fields and time stepping. 
+
+- As the current $\bar{U}$ is assumed to be smooth (and there are no non-linear terms), we do not enforce de-aliasing. For the DN operator, we use the truncated Fourier-Galerkin method developed in [3]. 
+
+- We precompute the bathymetry dependent part of the $\mathcal{G}(b)$, and we also implement absorbing boundary conditions [4].
+  
+- For time integration of the PDEs we use the standard Runge-Kutta 4 scheme, and for wavenumber computation, we incorporate the open source ray tracing module by [5].
+
+- The solver has been verified numerically by considering convergence as a function of grid size/Fourier modes, and by veryfying that the total energy is conserved in the case of variable bathymetry and divergence free currents. 
 
 ### References: 
 
