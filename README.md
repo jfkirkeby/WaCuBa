@@ -14,18 +14,36 @@ A simple Python module for flexible simulation of linear water waves interacting
 
 This Notebook contains a short introduction to the WaCuBa module for simulating linear water waves interacting with surface currents and variable bathymetry. Below follows
 
-1. The underlying mathematical model 
-2. Code features
-3. Numerical method
-4. Installation
+1. Installation
+2. The underlying mathematical model 
+3. Code features
+4. Numerical method
+
 
 An introductory Jupyter notebook for setting up and running the module is found [here](notebooks/example1.ipynb). 
 
 More notebooks and functionality will be added in the near future. 
 
 
+### 1. Installation
 
-### 1. Mathematical model
+To run WaCuBa locally, clone this repository and install the necessary dependencies using `pip`. 
+
+Open your terminal and run the following commands:
+
+```bash
+# Clone the repository
+git clone [https://github.com/jfkirkeby/WaCuBa.git](https://github.com/jfkirkeby/WaCuBa.git)
+
+# Navigate into the project folder
+cd WaCuBa
+
+# Install the required libraries
+pip install -r requirements.txt
+
+```
+
+### 2. Mathematical model
 The underlying system of partial differential equations that are solved numerically is 
 ```math
 \begin{cases}
@@ -36,7 +54,7 @@ The underlying system of partial differential equations that are solved numerica
 
 Above, $\eta(t,X)$ is the wave amplitude and $\varphi(t,X)$ is the surface velocity potential. In addition, $\bar{U}(X)$ is the surface current, $b = b(X)$ is the depth (from $z=0$) and $\mathcal{G}(b)$ is the Dirichlet-to-Neumann (DN) operator. The system is described and analysed in detail in [1]. 
 
-### 2. Code features
+### 3. Code features
 The code has the following features: 
 
  - Solves the Cauchy problem the wave system  with prescribed initial conditions $(\eta_0,\varphi_0)$ and variable bathymetry $b(X)$ and current $\bar{U}(X)$ on a rectangular domain. Returns $\eta(t,X),\varphi(t,X)$ and energy density $\mathcal{E}(t,X)$ and additional wave features. 
@@ -55,27 +73,9 @@ and the Schrödinger equation
 - Allows for flexible and easy comparison of results from different models for a given bathymetry and current.  
 
 
-### 3. Numerical method
+### 4. Numerical method
 
 We solve both the wave system and the energy and Schrödinger equations using a standard Fourier pseudo-spectral method (cf. [2]); we express our unknowns in a truncated Fourier basis, e.g., $\eta_N(t,X) = \sum_{|k| \leq N} \eta_{k}(t)e^{i k\cdot X}$, compute spatial derivatives in the $k$-domain, and transform back to physical space for multiplication by vector fields and time stepping. As the current $\bar{U}$ is assumed to be smooth (and there are no non-linear terms), we do not enforce de-aliasing. For the DN operator, we use the truncated Fourier-Galerkin method developed in [3]. We precompute the bathymetry dependent part of the $\mathcal{G}(b)$, and we also implement absorbing boundary conditions [4]. For time integration of the PDEs we use the standard Runge-Kutta 4 scheme and for wavenumber computation, we incorporate the open source ray tracing module [5]. The solver has been verified numerically by considering convergence as a function of grid size/Fourier modes, and by veryfying that the total energy is conserved in the case of variable bathymetry and divergence free currents. 
-
-### 4. Installation
-
-To run WaCuBa locally, clone this repository and install the necessary dependencies using `pip`. 
-
-Open your terminal and run the following commands:
-
-```bash
-# Clone the repository
-git clone [https://github.com/jfkirkeby/WaCuBa.git](https://github.com/jfkirkeby/WaCuBa.git)
-
-# Navigate into the project folder
-cd WaCuBa
-
-# Install the required libraries
-pip install -r requirements.txt
-
-```
 
 ### References: 
 
