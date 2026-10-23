@@ -6,6 +6,7 @@ from numpy.fft import fft2, ifft2, fftfreq
 from numpy.linalg import cond, solve
 from dataclasses import dataclass
 import scipy as sp  
+import scipy.optimize, scipy.integrate
 import xarray as xa
 import sys,os
 
@@ -270,7 +271,7 @@ def apply_dtn(phi, topo_data):
 # 3. Time integrator for wave system
 # ============================================================
 
-def rhs_system(eta, phi, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data):
+def rhs_system(eta, phi, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data, S=0.0):
 
     # Spectral gradients 
     d_eta_dx, d_eta_dy = spectral_gradient(eta, Kx, Ky)
@@ -284,33 +285,38 @@ def rhs_system(eta, phi, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data):
     Gphi = apply_dtn(phi, topo_data)
 
     # Evolution equations with sponge layers
-    eta_t = -adv_eta -divU*eta + Gphi - sigma * eta
+    eta_t = -adv_eta -divU*eta + Gphi - sigma * eta + S
     phi_t = -adv_phi - g * eta - sigma * phi
 
     return eta_t, phi_t
 
-def step_system_rk4(eta, phi, dt, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data):
+def step_system_rk4(eta, phi, dt, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data, source=None, t=0.0):
     
-    """ """
+    """ One RK4 step from t to t + dt. source is an optional callable S(t) added to the eta equation. """
     
-    k1_eta, k1_phi = rhs_system(eta, phi, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data)
+    if source is None:
+        S1 = S2 = S4 = 0.0
+    else:
+        S1, S2, S4 = source(t), source(t + 0.5*dt), source(t + dt)
+    
+    k1_eta, k1_phi = rhs_system(eta, phi, Ux, Uy,divU, g, Kx, Ky, sigma, topo_data, S1)
     
     k2_eta, k2_phi = rhs_system(
         eta + 0.5*dt*k1_eta,
         phi + 0.5*dt*k1_phi,
-        Ux, Uy, divU, g, Kx, Ky, sigma, topo_data
+        Ux, Uy, divU, g, Kx, Ky, sigma, topo_data, S2
     )
     
     k3_eta, k3_phi = rhs_system(
         eta + 0.5*dt*k2_eta,
         phi + 0.5*dt*k2_phi,
-        Ux, Uy, divU, g, Kx, Ky, sigma, topo_data
+        Ux, Uy, divU, g, Kx, Ky, sigma, topo_data, S2
     )
     
     k4_eta, k4_phi = rhs_system(
         eta + dt*k3_eta,
         phi + dt*k3_phi,
-        Ux, Uy, divU, g, Kx, Ky, sigma, topo_data
+        Ux, Uy, divU, g, Kx, Ky, sigma, topo_data, S4
     )
 
     eta_new = eta + (dt/6.0) * (k1_eta + 2*k2_eta + 2*k3_eta + k4_eta)
@@ -331,6 +337,8 @@ def simulate_wave_system(
     sponge_sides="lrtb", 
     sigma_max=1.0,
     snapshot_interval=None,
+    source=None,
+    callback=None,
     ):
     
     """ 
@@ -346,6 +354,10 @@ def simulate_wave_system(
         sponge_sides: which sides to apply sponge layer ("l", "r", "t", "b" for left, right, top, bottom)
         sigma_max: maximum damping coefficient in sponge layer
         snapshot_interval: time interval for saving snapshots (if None, only save final state)
+        source: optional callable S(t) returning a (Ny, Nx) array that is added to the eta equation,
+                e.g. from create_exact_unidirectional_source or create_spectral_source
+        callback: optional callable callback(t, eta, phi), called after every time step. Handy for
+                  recording time series in a subdomain without storing full snapshots.
     
     Returns:
         t_snapshots: list of time points for saved snapshots
@@ -370,7 +382,9 @@ def simulate_wave_system(
     n_steps = int(np.round(T_final / dt))
     
     if snapshot_interval is None:
-        snapshot_interval = n_steps
+        snapshot_every = n_steps
+    else:
+        snapshot_every = max(int(np.round(snapshot_interval / dt)), 1)
 
    
     #initialize snapshots
@@ -379,14 +393,18 @@ def simulate_wave_system(
     eta_snapshots = [eta0.copy()]
     phi_snapshots = [phi0.copy()]
     t_snapshots = [t]
-    energy_density_snapshots = [0.5*g*eta0.copy()**2 + 0.5*phi0.copy()*Gphi0.copy()] # Placeholder for initial energy density (can be computed if needed)
+    energy_density_snapshots = [0.5*g*eta0.copy()**2 + 0.5*phi0.copy()*Gphi0.copy()] 
    
-    for n in range(n_steps + 1):
-        # Step
-        eta, phi = step_system_rk4(eta, phi, dt, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data)
+    for n in range(1, n_steps + 1):
+        # Step from t to t + dt
+        eta, phi = step_system_rk4(eta, phi, dt, Ux, Uy, divU, g, Kx, Ky, sigma, topo_data, source=source, t=t)
+        t = n*dt
+        
+        if callback is not None:
+            callback(t, eta, phi)
         
         # Save snapshots
-        if n % int(snapshot_interval / dt) == 0 or n == n_steps:
+        if n % snapshot_every == 0 or n == n_steps:
     
             Gphi = apply_dtn(phi, topo_data)
             energy_density = 0.5 * (g * eta**2 + phi * Gphi)    
@@ -396,8 +414,6 @@ def simulate_wave_system(
             
             t_snapshots.append(t)
             print(f"Time: {t:.2f}/{T_final:.2f}", end='\r')
-        
-        t += dt
 
     return np.array(t_snapshots), eta_snapshots, phi_snapshots, energy_density_snapshots
 
@@ -757,3 +773,234 @@ def intrinsic_wave_quantities(kx,ky,b,X,Y):
        
     return sigma, Cg_x, Cg_y, divCg, grad_x_sigma, grad_y_sigma, Dxx, Dyy, Dxy
 
+
+
+# ============================================================
+# 6. Wave sources (internal wavemaker)
+# ============================================================
+#
+# The source S(t, X) is added to the eta equation. For a monochromatic component we use
+# S = Re( s(X) exp(-i omega t) ), where s is built along a beam in direction theta:
+#
+#     s(x') = Lambda * exp(i k (x' - x_c)) * prod_j (d/dx' - i(k_j - k)) / (i(k - k_j)) B(x') * W(y'),
+#
+# with B a C-infinity bump, k_j all the other roots of the dispersion relation (so the source
+# radiates nothing at those wavenumbers), W a transverse window and Lambda = 2 a |C_g(k)| / int B
+# so that the radiated wave has amplitude a. See notebooks/example2_wavemaker.ipynb.
+
+
+def dispersion_roots(omega, U, H, g=9.81, k_max=None):
+    """
+    All real roots k of the 1D dispersion relation (omega - U k)^2 = g|k| tanh(H|k|),
+    for constant current U (along the beam) and depth H.
+    """
+    if k_max is None:
+        k_max = 10*omega**2/g + 1.0
+        if U != 0:
+            k_max = max(k_max, 10*(omega + np.sqrt(g*H))**2/(g*U**2), 10*g/U**2)
+
+    def D(k):
+        return (omega - U*k)**2 - g*np.abs(k)*np.tanh(H*np.abs(k))
+
+    # log-spaced scan on each side of zero, so both small and very large roots are caught
+    q = np.logspace(-8, np.log10(k_max), 20000)
+    roots = []
+    for k_grid in (q, -q):
+        D_vals = D(k_grid)
+        for i in np.where(np.diff(np.sign(D_vals)) != 0)[0]:
+            roots.append(sp.optimize.brentq(D, k_grid[i], k_grid[i+1], xtol=1e-14, rtol=1e-14))
+    return np.sort(np.array(roots))
+
+
+def group_velocity(k, omega, U, H, g=9.81):
+    """ Total group velocity d omega/dk = U + d sigma/dk on the branch through (k, omega). """
+    abs_k = np.abs(k)
+    tanh_kH = np.tanh(abs_k*H)
+    dsigma2_dk = g*np.sign(k)*(tanh_kH + abs_k*H*(1 - tanh_kH**2))
+    return U + dsigma2_dk/(2*(omega - U*k))
+
+
+def _current_along(U, theta):
+    """ Projection of a constant current U (scalar = x-component, or (Ux, Uy)) on direction theta. """
+    Ux, Uy = (U, 0.0) if np.isscalar(U) else U
+    return Ux*np.cos(theta) + Uy*np.sin(theta)
+
+
+def wave_frequency(k, theta, U, H, g=9.81):
+    """ Absolute frequency omega = sigma(k) + U.k of a wave with wavenumber k > 0 in direction theta. """
+    return np.sqrt(g*k*np.tanh(k*H)) + _current_along(U, theta)*k
+
+
+def _bump_derivatives(u, n):
+    """
+    Derivatives d^m/du^m of the bump exp(-1/(1-u^2)) for m = 0..n, for |u| < 1.
+    Each derivative is exp(-y) times a polynomial in u and y = 1/(1-u^2), and we
+    track the coefficients of that polynomial using dy/du = 2 u y^2.
+    """
+    y = 1.0/(1.0 - u**2)
+    base = np.exp(-y)
+    terms = {(0, 0): 1.0}   # (power of u, power of y) -> coefficient
+    derivs = []
+    for m in range(n + 1):
+        poly = sum(c*u**pu*y**py for (pu, py), c in terms.items())
+        derivs.append(base*poly)
+        new_terms = {}
+        for (pu, py), c in terms.items():
+            if pu > 0:
+                new_terms[(pu - 1, py)] = new_terms.get((pu - 1, py), 0.0) + c*pu
+            if py > 0:
+                new_terms[(pu + 1, py + 1)] = new_terms.get((pu + 1, py + 1), 0.0) + 2.0*c*py
+            new_terms[(pu + 1, py + 2)] = new_terms.get((pu + 1, py + 2), 0.0) - 2.0*c
+        terms = new_terms
+    return derivs
+
+
+_BUMP_INTEGRAL = sp.integrate.quad(lambda u: np.exp(-1.0/(1.0 - u**2)), -1, 1)[0]   # ~0.444
+
+
+def _transverse_window(Y_rot, length, taper):
+    """ Window along the source line: 1 in the middle, cosine taper of width taper at the ends. """
+    if length is None:
+        return np.ones_like(Y_rot)
+    d = 0.5*length - np.abs(Y_rot)        # distance to the end of the line
+    if taper <= 0:
+        return (d >= 0).astype(float)
+    return 0.5*(1 - np.cos(np.pi*np.clip(d/taper, 0, 1)))
+
+
+def unidirectional_source_field(X, Y, k, U, H, center, theta=0.0, a=1.0, phase=0.0,
+                                width=None, length=None, taper=None, g=9.81):
+    """
+    Complex spatial amplitude s(X) of a source that radiates a single plane wave
+    a*cos(k (x' - x_c) - omega t + phase) in direction theta, and nothing else.
+    
+    Args:
+        X, Y: grid
+        k: target wavenumber (> 0)
+        U: constant current, scalar (x-component) or tuple (Ux, Uy)
+        H: constant depth
+        center: (x_c, y_c), centre of the source
+        theta: propagation direction (radians, from the x-axis)
+        a, phase: amplitude and phase of the radiated wave
+        width: length of the source support along the beam (default: one wavelength)
+        length: length of the source line across the beam (default: infinite)
+        taper: width of the cosine taper at each end of the line (default: length/5)
+        
+    Returns: (s, omega), with S(t, X) = Re(s exp(-i omega t)).
+    """
+    k = abs(k)
+    U_eff = _current_along(U, theta)
+    sigma_k = np.sqrt(g*k*np.tanh(k*H))
+    omega = sigma_k + U_eff*k
+    if omega <= 0:
+        raise ValueError(f"Wave with k={k:.3f} in direction {theta:.2f} is blocked by the current (U_eff={U_eff:.3f}).")
+    cg = group_velocity(k, omega, U_eff, H, g)
+    if cg <= 0:
+        raise ValueError(f"Wave with k={k:.3f} in direction {theta:.2f} has C_g={cg:.3f} <= 0, so its energy goes the wrong way.")
+
+    # The modes we want to kill: every other real root of the dispersion relation along the beam
+    roots = dispersion_roots(omega, U_eff, H, g)
+    unwanted = roots[np.abs(roots - k) > 1e-8*max(1.0, k)]
+
+    # Operator prod_j (d/dx - i(k_j - k)) / (i(k - k_j)) as polynomial coefficients in d/dx
+    coeffs = np.polynomial.polynomial.polyfromroots(1j*(unwanted - k))
+    if len(unwanted) > 0:
+        coeffs = coeffs/np.prod(1j*(k - unwanted))
+
+    # Rotated coordinates: x' along the beam, y' across it, both relative to the centre
+    x_c, y_c = center
+    X_rot = (X - x_c)*np.cos(theta) + (Y - y_c)*np.sin(theta)
+    Y_rot = -(X - x_c)*np.sin(theta) + (Y - y_c)*np.cos(theta)
+
+    if width is None:
+        width = 2*np.pi/k
+    R = 0.5*width
+    inside = np.abs(X_rot) < R
+    u = X_rot[inside]/R
+
+    # Apply the operator to the bump B(x'/R) (chain rule gives the 1/R^m)
+    dB = _bump_derivatives(u, len(coeffs) - 1)
+    Bop = sum(c*dB[m]/R**m for m, c in enumerate(coeffs))
+
+    # Amplitude so that the radiated wave has amplitude a: eta = s_hat(k) / (2 C_g)
+    Lam = 2*a*np.abs(cg)/(_BUMP_INTEGRAL*R)
+
+    s = np.zeros(X.shape, dtype=complex)
+    s[inside] = Lam*np.exp(1j*(k*X_rot[inside] + phase))*Bop
+    if taper is None and length is not None:
+        taper = length/5
+    s *= _transverse_window(Y_rot, length, taper)
+    return s, omega
+
+
+def _ramp(t, T_ramp):
+    """ Smooth start-up from 0 to 1 over T_ramp. """
+    if t <= 0:
+        return 0.0
+    if t >= T_ramp:
+        return 1.0
+    return 0.5*(1 - np.cos(np.pi*t/T_ramp))
+
+
+def create_exact_unidirectional_source(X, Y, k, U, H, center, theta=0.0, a=1.0, phase=0.0,
+                                       width=None, length=None, taper=None,
+                                       ramp_periods=3.0, g=9.81):
+    """
+    Monochromatic wavemaker. Returns a callable F(t) to pass as source= to simulate_wave_system.
+    It radiates a*cos(k (x' - x_c) - omega t + phase) along direction theta (x' = distance along the beam),
+    with no wave going upstream. See unidirectional_source_field for the arguments.
+    The source is ramped up smoothly over ramp_periods wave periods.
+    F.omega holds the absolute frequency.
+    """
+    s, omega = unidirectional_source_field(X, Y, k, U, H, center, theta=theta, a=a, phase=phase,
+                                           width=width, length=length, taper=taper, g=g)
+    s_re, s_im = np.real(s), np.imag(s)
+    T_ramp = ramp_periods*2*np.pi/omega
+
+    def F(t):
+        # Re(s exp(-i omega t))
+        return _ramp(t, T_ramp)*(s_re*np.cos(omega*t) + s_im*np.sin(omega*t))
+
+    F.omega = omega
+    return F
+
+
+def create_spectral_source(X, Y, k, theta, a, U, H, center, phase=None,
+                           width=None, length=None, taper=None,
+                           ramp_periods=3.0, seed=None, g=9.81):
+    """
+    Spectral wavemaker: superposition of unidirectional sources, one for each component.
+    
+    Args:
+        k, theta, a: arrays (same length) of wavenumbers, directions (radians) and amplitudes
+        phase: array of phases (default: random, uniform on [0, 2pi), drawn with seed)
+        width: support along each beam, scalar or array (default: one wavelength of each component)
+        other arguments as in unidirectional_source_field. All components share the same centre.
+        
+    Returns a callable F(t) for simulate_wave_system. The field radiated downstream is
+        eta = sum_j a_j cos(k_j e_j.(X - X_c) - omega_j t + phase_j),  e_j = (cos theta_j, sin theta_j).
+    F.omega and F.phase hold omega_j and phase_j.
+    """
+    k, theta, a = np.broadcast_arrays(np.atleast_1d(k), np.atleast_1d(theta), np.atleast_1d(a))
+    n = len(k)
+    if phase is None:
+        phase = np.random.default_rng(seed).uniform(0, 2*np.pi, n)
+    phase = np.broadcast_to(phase, (n,))
+    widths = np.broadcast_to(np.array(width, dtype=object), (n,))
+
+    fields, omegas = [], []
+    for j in range(n):
+        s, om = unidirectional_source_field(X, Y, k[j], U, H, center, theta=theta[j], a=a[j], phase=phase[j],
+                                            width=widths[j], length=length, taper=taper, g=g)
+        fields.append(s)
+        omegas.append(om)
+    fields = np.array(fields)
+    omegas = np.array(omegas)
+    T_ramp = ramp_periods*2*np.pi/omegas.min()
+
+    def F(t):
+        return _ramp(t, T_ramp)*np.real(np.tensordot(np.exp(-1j*omegas*t), fields, axes=1))
+
+    F.omega = omegas
+    F.phase = np.array(phase)
+    return F
