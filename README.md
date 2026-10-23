@@ -22,6 +22,8 @@ This Notebook contains a short introduction to the WaCuBa module for simulating 
 
 An introductory Jupyter notebook for setting up and running the module is found [here](notebooks/example1.ipynb). 
 
+A second notebook on generating monochromatic waves and directional wave spectra with an internal wavemaker is found [here](notebooks/example2_wavemaker.ipynb).
+
 More notebooks and functionality will be added in the near future. 
 
 
@@ -69,6 +71,8 @@ and the Schrödinger equation
 ```math
 \partial_t A_\varphi + (\bar{U} + C_g)\cdot \nabla_X A_\varphi + \frac{1}{2}\left(\nabla_X \cdot(\bar{U} + C_g)\right) A_\varphi + \frac{D_{\bar{U}+ C_g}\sigma }{2\sigma}A_\varphi  +\frac{i\mu}{2}\nabla_X \cdot (D \nabla_X A_\varphi) = 0.
 ```
+
+- Internal wavemaker: a source term that radiates a prescribed monochromatic wave, or a directional spectrum of waves, in one direction only on a constant current and depth (`create_exact_unidirectional_source`, `create_spectral_source`).
 
 - Allows for flexible and easy comparison of results from different models for a given bathymetry and current.  
 
