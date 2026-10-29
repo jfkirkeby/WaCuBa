@@ -789,10 +789,11 @@ def intrinsic_wave_quantities(kx,ky,b,X,Y):
 # so that the radiated wave has amplitude a. See notebooks/example2_wavemaker.ipynb.
 
 
-def dispersion_roots(omega, U, H, g=9.81, k_max=None):
+def dispersion_roots(omega, U, H, g=9.81, k_max=None, ky=0.0):
     """
-    All real roots k of the 1D dispersion relation (omega - U k)^2 = g|k| tanh(H|k|),
-    for constant current U (along the beam) and depth H.
+    All real roots k of the 1D dispersion relation (omega - U k)^2 = g|K| tanh(H|K|),
+    with |K| = sqrt(k^2 + ky^2), for constant current U (along k) and depth H.
+    ky = 0 is the plain 1D problem along a beam; ky != 0 is used by the periodic source.
     """
     if k_max is None:
         k_max = 10*omega**2/g + 1.0
@@ -800,7 +801,8 @@ def dispersion_roots(omega, U, H, g=9.81, k_max=None):
             k_max = max(k_max, 10*(omega + np.sqrt(g*H))**2/(g*U**2), 10*g/U**2)
 
     def D(k):
-        return (omega - U*k)**2 - g*np.abs(k)*np.tanh(H*np.abs(k))
+        K = np.sqrt(k**2 + ky**2)
+        return (omega - U*k)**2 - g*K*np.tanh(H*K)
 
     # log-spaced scan on each side of zero, so both small and very large roots are caught
     q = np.logspace(-8, np.log10(k_max), 20000)
@@ -812,11 +814,14 @@ def dispersion_roots(omega, U, H, g=9.81, k_max=None):
     return np.sort(np.array(roots))
 
 
-def group_velocity(k, omega, U, H, g=9.81):
-    """ Total group velocity d omega/dk = U + d sigma/dk on the branch through (k, omega). """
-    abs_k = np.abs(k)
-    tanh_kH = np.tanh(abs_k*H)
-    dsigma2_dk = g*np.sign(k)*(tanh_kH + abs_k*H*(1 - tanh_kH**2))
+def group_velocity(k, omega, U, H, g=9.81, ky=0.0):
+    """
+    Total group velocity d omega/dk = U + d sigma/dk on the branch through (k, omega),
+    with |K| = sqrt(k^2 + ky^2) as in dispersion_roots.
+    """
+    K = np.sqrt(k**2 + ky**2)
+    tanh_KH = np.tanh(K*H)
+    dsigma2_dk = g*(tanh_KH + K*H*(1 - tanh_KH**2))*k/K
     return U + dsigma2_dk/(2*(omega - U*k))
 
 
@@ -868,6 +873,33 @@ def _transverse_window(Y_rot, length, taper):
     return 0.5*(1 - np.cos(np.pi*np.clip(d/taper, 0, 1)))
 
 
+def _beam_profile(xi, k, unwanted, cg, a, phase, width):
+    """
+    The 1D source along a beam, as a function of the distance xi from the centre:
+    Lambda exp(i(k xi + phase)) prod_j (d/dxi - i(k_j - k)) / (i(k - k_j)) B(xi/R),
+    which radiates a wave of amplitude a at k and nothing at the unwanted roots k_j.
+    """
+    # Operator prod_j (d/dx - i(k_j - k)) / (i(k - k_j)) as polynomial coefficients in d/dx
+    coeffs = np.polynomial.polynomial.polyfromroots(1j*(unwanted - k))
+    if len(unwanted) > 0:
+        coeffs = coeffs/np.prod(1j*(k - unwanted))
+
+    R = 0.5*width
+    inside = np.abs(xi) < R
+    u = xi[inside]/R
+
+    # Apply the operator to the bump B(xi/R) (chain rule gives the 1/R^m)
+    dB = _bump_derivatives(u, len(coeffs) - 1)
+    Bop = sum(c*dB[m]/R**m for m, c in enumerate(coeffs))
+
+    # Amplitude so that the radiated wave has amplitude a: eta = s_hat(k) / (2 C_g)
+    Lam = 2*a*np.abs(cg)/(_BUMP_INTEGRAL*R)
+
+    s = np.zeros(xi.shape, dtype=complex)
+    s[inside] = Lam*np.exp(1j*(k*xi[inside] + phase))*Bop
+    return s
+
+
 def unidirectional_source_field(X, Y, k, U, H, center, theta=0.0, a=1.0, phase=0.0,
                                 width=None, length=None, taper=None, g=9.81):
     """
@@ -902,11 +934,6 @@ def unidirectional_source_field(X, Y, k, U, H, center, theta=0.0, a=1.0, phase=0
     roots = dispersion_roots(omega, U_eff, H, g)
     unwanted = roots[np.abs(roots - k) > 1e-8*max(1.0, k)]
 
-    # Operator prod_j (d/dx - i(k_j - k)) / (i(k - k_j)) as polynomial coefficients in d/dx
-    coeffs = np.polynomial.polynomial.polyfromroots(1j*(unwanted - k))
-    if len(unwanted) > 0:
-        coeffs = coeffs/np.prod(1j*(k - unwanted))
-
     # Rotated coordinates: x' along the beam, y' across it, both relative to the centre
     x_c, y_c = center
     X_rot = (X - x_c)*np.cos(theta) + (Y - y_c)*np.sin(theta)
@@ -914,19 +941,7 @@ def unidirectional_source_field(X, Y, k, U, H, center, theta=0.0, a=1.0, phase=0
 
     if width is None:
         width = 2*np.pi/k
-    R = 0.5*width
-    inside = np.abs(X_rot) < R
-    u = X_rot[inside]/R
-
-    # Apply the operator to the bump B(x'/R) (chain rule gives the 1/R^m)
-    dB = _bump_derivatives(u, len(coeffs) - 1)
-    Bop = sum(c*dB[m]/R**m for m, c in enumerate(coeffs))
-
-    # Amplitude so that the radiated wave has amplitude a: eta = s_hat(k) / (2 C_g)
-    Lam = 2*a*np.abs(cg)/(_BUMP_INTEGRAL*R)
-
-    s = np.zeros(X.shape, dtype=complex)
-    s[inside] = Lam*np.exp(1j*(k*X_rot[inside] + phase))*Bop
+    s = _beam_profile(X_rot, k, unwanted, cg, a, phase, width)
     if taper is None and length is not None:
         taper = length/5
     s *= _transverse_window(Y_rot, length, taper)
@@ -1002,5 +1017,88 @@ def create_spectral_source(X, Y, k, theta, a, U, H, center, phase=None,
         return _ramp(t, T_ramp)*np.real(np.tensordot(np.exp(-1j*omegas*t), fields, axes=1))
 
     F.omega = omegas
+    F.phase = np.array(phase)
+    return F
+
+
+def create_line_source(X, Y, k, theta, a, U, H, center, phase=None, width=None,
+                       y_extent=None, taper=None, ramp_periods=3.0, seed=None, g=9.81):
+    """
+    Wavemaker on a straight line x = x_c. Oblique waves are made with the phase exp(i ky y) along
+    the line, rather than by rotating the line, and the 1D problem is solved in x with ky fixed.
+    
+    Two ways to use it:
+      - y_extent=(y0, y1): the line runs from y0 to y1 with cosine tapers of width taper at the ends.
+        Let the ends run into thick top and bottom sponges, so whatever they diffract is absorbed.
+        Works with sponges on all sides.
+      - y_extent=None: the line covers the full height and ky is rounded to a multiple of 2 pi / Ly,
+        so the source is periodic in y and there are no ends at all. Only for domains periodic in y
+        (sponges on the left and right only).
+    
+    Args:
+        k, theta, a: wavenumbers (> 0), directions (radians) and amplitudes; scalars or arrays
+        U: constant current (Ux, Uy) or scalar Ux
+        H: constant depth
+        center: (x_c, y_c); the line is at x = x_c, and y_c only sets the phase reference
+        phase: phases (default 0 for a single wave, random with seed for several)
+        width: support of the source in x, scalar or array (default: one wavelength 2 pi/|kx|)
+        y_extent, taper: see above (default taper: a fifth of the line)
+        
+    Returns a callable F(t) for simulate_wave_system. The radiated field is
+        eta = sum_j a_j cos(kx_j (x - x_c) + ky_j (y - y_c) - omega_j t + phase_j),
+    on the side of the line the x group velocity points to, and zero on the other side.
+    F.theta, F.omega and F.phase hold the actual directions, frequencies and phases.
+    """
+    k, theta, a = np.broadcast_arrays(np.atleast_1d(k), np.atleast_1d(theta), np.atleast_1d(a))
+    n = len(k)
+    if phase is None:
+        phase = np.zeros(n) if n == 1 else np.random.default_rng(seed).uniform(0, 2*np.pi, n)
+    phase = np.broadcast_to(phase, (n,))
+    widths = np.broadcast_to(np.array(width, dtype=object), (n,))
+    Ux, Uy = (U, 0.0) if np.isscalar(U) else U
+    x_c, y_c = center
+    Ly = (Y[1, 0] - Y[0, 0])*Y.shape[0]
+
+    fields, omegas, thetas = [], [], []
+    for j in range(n):
+        kk = abs(k[j])
+        ky = kk*np.sin(theta[j])
+        if y_extent is None:
+            ky = 2*np.pi/Ly*np.round(ky*Ly/(2*np.pi))
+        if abs(ky) >= kk:
+            raise ValueError(f"Direction {theta[j]:.2f} is too close to the y-axis for k={kk:.3f}.")
+        kx = np.sign(np.cos(theta[j]))*np.sqrt(kk**2 - ky**2)
+        sigma_k = np.sqrt(g*kk*np.tanh(kk*H))
+        omega = sigma_k + Ux*kx + Uy*ky
+        if omega <= 0:
+            raise ValueError(f"Wave with k={kk:.3f} in direction {theta[j]:.2f} is blocked by the current.")
+
+        # 1D problem in x with ky fixed: frequency omega - Uy ky, current Ux
+        Om = omega - Uy*ky
+        cg = group_velocity(kx, Om, Ux, H, g, ky=ky)
+        if cg*kx <= 0:
+            raise ValueError(f"Wave with k={kk:.3f} in direction {theta[j]:.2f} has its energy going the wrong way in x.")
+        roots = dispersion_roots(Om, Ux, H, g, ky=ky)
+        unwanted = roots[np.abs(roots - kx) > 1e-8*max(1.0, kk)]
+
+        w = widths[j] if widths[j] is not None else 2*np.pi/abs(kx)
+        s = _beam_profile(X - x_c, kx, unwanted, cg, a[j], phase[j], w)*np.exp(1j*ky*(Y - y_c))
+        fields.append(s)
+        omegas.append(omega)
+        thetas.append(np.arctan2(ky, kx))
+    fields = np.array(fields)
+    if y_extent is not None:
+        y0, y1 = y_extent
+        if taper is None:
+            taper = (y1 - y0)/5
+        fields *= _transverse_window(Y - 0.5*(y0 + y1), y1 - y0, taper)
+    omegas = np.array(omegas)
+    T_ramp = ramp_periods*2*np.pi/omegas.min()
+
+    def F(t):
+        return _ramp(t, T_ramp)*np.real(np.tensordot(np.exp(-1j*omegas*t), fields, axes=1))
+
+    F.omega = omegas
+    F.theta = np.array(thetas)
     F.phase = np.array(phase)
     return F
